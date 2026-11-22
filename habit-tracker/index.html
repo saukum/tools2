@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Трекер привычек</title>
+<style>
+  :root {
+    --bg: #fafaf8;
+    --card: #ffffff;
+    --text: #1d1d1b;
+    --muted: #8a8a85;
+    --line: #e8e8e3;
+    --accent: #2f9e6b;
+    --accent-dark: #1f6b49;
+    --accent-soft: #e6f4ed;
+    --accent-line: #bfe3d0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px 64px;
+  }
+  main { width: 100%; max-width: 460px; }
+  button { font: inherit; color: inherit; }
+  .date { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  h1 { margin: 4px 0 28px; font-size: 28px; font-weight: 600; }
+  h2 { margin: 40px 0 12px; font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; }
+  h2 .pct { color: var(--text); font-weight: 600; letter-spacing: 0; font-size: 15px; text-transform: none; }
+
+  /* Плашка «редактируете прошлый день» */
+  .editing {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    margin: -14px 0 18px; padding: 10px 14px;
+    background: #fff7e6; border: 1px solid #f1dcaa; border-radius: 10px;
+    font-size: 14px; color: #7a5b12;
+  }
+  .editing[hidden] { display: none; }
+  .editing button { border: 0; background: none; padding: 0; cursor: pointer; color: #7a5b12; font-weight: 600; text-decoration: underline; white-space: nowrap; }
+
+  /* Привычки выбранного дня */
+  .habits { display: flex; flex-direction: column; gap: 10px; }
+  .habit {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%;
+    padding: 16px 18px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    font-size: 17px;
+    text-align: left;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .habit:hover { border-color: #d4d4cd; }
+  .habit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .box {
+    flex: none; width: 24px; height: 24px;
+    border: 2px solid #cfcfc8; border-radius: 7px;
+    display: grid; place-items: center;
+    transition: all .15s;
+  }
+  .box svg { width: 14px; height: 14px; stroke: #fff; stroke-width: 3; fill: none; opacity: 0; transition: opacity .15s; }
+  .habit .name { flex: 1; min-width: 0; }
+  .habit .badge { flex: none; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .habit .badge b { color: var(--text); font-weight: 600; }
+  .habit[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+  .habit[aria-pressed="true"] .box { background: var(--accent); border-color: var(--accent); }
+  .habit[aria-pressed="true"] .box svg { opacity: 1; }
+  .habit[aria-pressed="true"] .name { color: var(--accent-dark); }
+  .habit[aria-pressed="true"] .badge b { color: var(--accent-dark); }
+
+  .summary { margin: 16px 2px 0; font-size: 14px; color: var(--muted); }
+
+  /* Заметка дня */
+  .note { display: block; margin-top: 18px; }
+  .note span { display: block; margin: 0 2px 6px; font-size: 13px; color: var(--muted); }
+  .note textarea {
+    width: 100%; min-height: 78px; resize: vertical;
+    padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--card); color: var(--text);
+    font: inherit; font-size: 15px; line-height: 1.4;
+  }
+  .note textarea::placeholder { color: #b5b5ae; }
+  .note textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .note .saved { display: block; height: 16px; margin: 4px 2px 0; font-size: 12px; color: var(--accent-dark); opacity: 0; transition: opacity .2s; }
+  .note .saved.on { opacity: 1; }
+
+  /* Неделя */
+  .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+  .day { text-align: center; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; }
+  .day .dot {
+    margin: 6px auto 0; width: 100%; max-width: 36px; aspect-ratio: 1; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 13px; font-weight: 600; color: var(--muted);
+    background: var(--card); border: 1px solid var(--line);
+    position: relative;
+  }
+  .day:hover .dot { border-color: #bdbdb5; }
+  .day.full .dot { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .day.part .dot { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-dark); }
+  .day.today .dot { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--text); }
+  .day.sel .dot { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px #d98e04; }
+  .day.has-note .dot::after, .cal .c.has-note::after {
+    content: ""; position: absolute; top: 1px; right: 1px; width: 7px; height: 7px; border-radius: 50%;
+    background: #d98e04; border: 1.5px solid var(--bg);
+  }
+  .legend { margin-top: 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* Календари месяца */
+  .month-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px 18px; margin-bottom: 12px;
+  }
+  .month-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .month-head .title { font-size: 16px; font-weight: 600; }
+  .month-head .meta { font-size: 13px; color: var(--muted); }
+  .month-head .meta b { color: var(--text); font-weight: 600; }
+  .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+  .cal .wd { text-align: center; font-size: 11px; color: var(--muted); padding-bottom: 2px; }
+  .cal .c {
+    position: relative;
+    aspect-ratio: 1; border-radius: 8px; border: 0; padding: 0;
+    display: grid; place-items: center;
+    font-size: 12px; color: var(--muted);
+    background: #f4f4f0;
+  }
+  .cal .c.empty { background: none; }
+  .cal button.c { cursor: pointer; }
+  .cal button.c:hover { filter: brightness(.95); }
+  .cal .c.done { background: var(--accent); color: #fff; font-weight: 600; }
+  .cal .c.miss { background: #f4f4f0; color: #b0b0a8; }
+  .cal .c.future { background: none; border: 1px dashed var(--line); color: #c8c8c1; }
+  .cal .c.today { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--text); }
+  .cal .c.sel { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px #d98e04; }
+
+  @media (max-width: 420px) {
+    .habit { padding: 14px; gap: 10px; font-size: 16px; }
+    .habit .badge .lbl { display: none; }
+    .month-head { flex-direction: column; gap: 2px; }
+    h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="date" id="weekday"></div>
+  <h1 id="date"></h1>
+  <div class="editing" id="editing" hidden>
+    <span>Вы правите прошлый день</span>
+    <button type="button" id="backToday">К сегодняшнему дню</button>
+  </div>
+
+  <div class="habits" id="habits"></div>
+  <div class="summary" id="progress"></div>
+
+  <label class="note">
+    <span>Заметка дня</span>
+    <textarea id="note" maxlength="1000" placeholder="Например: диктант — 4, ошибки на -тся/-ться. Или причина пропуска."></textarea>
+    <span class="saved" id="saved">Сохранено</span>
+  </label>
+
+  <h2><span>Последние 7 дней</span><span class="pct" id="weekPct"></span></h2>
+  <div class="week" id="week"></div>
+  <div class="legend" id="weekLegend"></div>
+
+  <h2><span id="monthName"></span></h2>
+  <div id="months"></div>
+  <div class="legend">Нажмите на любой день, чтобы поставить или снять галочки и написать заметку. Оранжевая точка — у дня есть заметка.</div>
+</main>
+
+<script>
+const HABITS = [
+  { id: "workout",    name: "Зарядка" },
+  { id: "dictation",  name: "Диктант" },
+  { id: "nofastfood", name: "День без fastfood" },
+];
+const KEY = "habit-tracker-v1";        // { "2026-11-22": ["workout", ...] }
+const NOTES_KEY = "habit-tracker-notes-v1"; // { "2026-11-22": "текст" }
+
+function loadJSON(key) {
+  try { return JSON.parse(localStorage.getItem(key)) || {}; } catch { return {}; }
+}
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch (e) { alert("Не удалось сохранить: " + e.message); return false; }
+}
+
+function dayKey(d) {
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function fromKey(k) { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+let data = loadJSON(KEY);
+let notes = loadJSON(NOTES_KEY);
+let current = dayKey(new Date());
+let selected = null;           // null = сегодня; иначе ключ прошлого дня
+let noteShownFor = null;       // для какого дня сейчас показана заметка в поле
+
+const target = () => selected || current;
+const isDone = (d, id) => (data[dayKey(d)] || []).includes(id);
+
+// Серия: подряд идущие дни, где привычка выполнена. Если сегодня ещё не отмечено — считается до вчера.
+function streak(id, now) {
+  let d = now, n = 0;
+  if (!isDone(d, id)) d = addDays(d, -1);
+  while (isDone(d, id)) { n++; d = addDays(d, -1); }
+  return n;
+}
+
+const noteEl = document.getElementById("note");
+const savedEl = document.getElementById("saved");
+
+function render() {
+  const now = new Date();
+  current = dayKey(now);
+  if (selected && selected >= current) selected = null; // наступили сутки/выбран «сегодня»
+  const tk = target();
+  const td = fromKey(tk);
+
+  document.getElementById("weekday").textContent = td.toLocaleDateString("ru-RU", { weekday: "long" });
+  document.getElementById("date").textContent = td.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  document.getElementById("editing").hidden = !selected;
+
+  // --- Привычки выбранного дня ---
+  const done = new Set(data[tk] || []);
+  const list = document.getElementById("habits");
+  list.innerHTML = "";
+  for (const h of HABITS) {
+    const s = streak(h.id, now);
+    const b = document.createElement("button");
+    b.className = "habit";
+    b.type = "button";
+    b.setAttribute("aria-pressed", done.has(h.id));
+    b.innerHTML = `<span class="box"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span><span class="name"></span><span class="badge"></span>`;
+    b.querySelector(".name").textContent = h.name;
+    b.querySelector(".badge").innerHTML = `<span class="lbl">Серия: </span><b>${s}</b> ${plural(s, "день", "дня", "дней")}`;
+    b.addEventListener("click", () => toggle(h.id));
+    list.appendChild(b);
+  }
+  document.getElementById("progress").textContent =
+    `${selected ? "Выполнено" : "Сегодня"}: ${done.size} из ${HABITS.length}`;
+
+  // --- Заметка: не затираем текст, пока в поле печатают ---
+  if (noteShownFor !== tk || document.activeElement !== noteEl) {
+    noteEl.value = notes[tk] || "";
+    noteShownFor = tk;
+  }
+
+  // --- Неделя + процент ---
+  const week = document.getElementById("week");
+  week.innerHTML = "";
+  let weekDone = 0;
+  for (let i = 6; i >= 0; i--) {
+    const d = addDays(now, -i);
+    const k = dayKey(d);
+    const n = (data[k] || []).length;
+    weekDone += n;
+    const el = document.createElement("button");
+    el.type = "button";
+    el.dataset.date = k;
+    el.className = "day" + (n === HABITS.length ? " full" : n > 0 ? " part" : "")
+      + (i === 0 ? " today" : "") + (k === selected ? " sel" : "") + (notes[k] ? " has-note" : "");
+    el.innerHTML = `${d.toLocaleDateString("ru-RU", { weekday: "short" })}<div class="dot">${d.getDate()}</div>`;
+    el.title = `${n} из ${HABITS.length}` + (notes[k] ? " · " + notes[k] : "");
+    week.appendChild(el);
+  }
+  const weekTotal = 7 * HABITS.length;
+  document.getElementById("weekPct").textContent = `${Math.round(weekDone / weekTotal * 100)}%`;
+  document.getElementById("weekLegend").textContent =
+    `Выполнено ${weekDone} из ${weekTotal} отметок. Тёмный круг — выполнено всё, светлый — частично.`;
+
+  // --- Календари месяца ---
+  const year = now.getFullYear(), month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const offset = (new Date(year, month, 1).getDay() + 6) % 7; // неделя с понедельника
+  document.getElementById("monthName").textContent =
+    now.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+
+  const box = document.getElementById("months");
+  box.innerHTML = "";
+  for (const h of HABITS) {
+    let cells = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map(w => `<div class="wd">${w}</div>`).join("");
+    cells += `<div class="c empty"></div>`.repeat(offset);
+    let count = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const k = dayKey(new Date(year, month, day));
+      let cls;
+      if (k > current) cls = "future";
+      else if (isDone(new Date(year, month, day), h.id)) { cls = "done"; count++; }
+      else cls = "miss";
+      if (k === current) cls += " today";
+      if (k === selected) cls += " sel";
+      if (k <= current && notes[k]) cls += " has-note";
+      const tag = k > current ? "div" : "button";
+      const extra = k > current ? "" : ` type="button" data-date="${k}"`;
+      cells += `<${tag} class="c ${cls}"${extra}>${day}</${tag}>`;
+    }
+    const s = streak(h.id, now);
+    const card = document.createElement("div");
+    card.className = "month-card";
+    card.innerHTML = `
+      <div class="month-head">
+        <span class="title"></span>
+        <span class="meta">В этом месяце: <b>${count}</b> из ${now.getDate()} · серия <b>${s}</b></span>
+      </div>
+      <div class="cal">${cells}</div>`;
+    card.querySelector(".title").textContent = h.name;
+    box.appendChild(card);
+  }
+}
+
+function toggle(id) {
+  data = loadJSON(KEY); // подхватить изменения из другой вкладки
+  const tk = target();
+  const set = new Set(data[tk] || []);
+  set.has(id) ? set.delete(id) : set.add(id);
+  if (set.size) data[tk] = [...set]; else delete data[tk];
+  saveJSON(KEY, data);
+  render();
+}
+
+// Выбор дня по клику в неделе или календарях
+function pickDay(k) {
+  selected = (k >= current) ? null : k;
+  noteShownFor = null;
+  noteEl.blur();
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-date]");
+  if (el) pickDay(el.dataset.date);
+});
+document.getElementById("backToday").addEventListener("click", () => pickDay(current));
+
+// Заметка: сохраняем при вводе
+let savedTimer;
+noteEl.addEventListener("input", () => {
+  notes = loadJSON(NOTES_KEY);
+  const tk = target();
+  const text = noteEl.value;
+  if (text.trim()) notes[tk] = text; else delete notes[tk];
+  if (saveJSON(NOTES_KEY, notes)) {
+    savedEl.classList.add("on");
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => savedEl.classList.remove("on"), 1200);
+  }
+  // Точка «есть заметка» — без полной перерисовки, чтобы не сбивать фокус и клики
+  document.querySelectorAll(`[data-date="${tk}"]`).forEach(el => el.classList.toggle("has-note", !!notes[tk]));
+});
+
+function reloadAll() { data = loadJSON(KEY); notes = loadJSON(NOTES_KEY); render(); }
+document.addEventListener("visibilitychange", () => { if (!document.hidden) reloadAll(); });
+window.addEventListener("storage", e => { if (e.key === KEY || e.key === NOTES_KEY) reloadAll(); });
+
+render();
+</script>
+</body>
+</html>
